@@ -26,9 +26,10 @@ Get a free key at https://console.groq.com/keys.
 uv run src/mini_calude_code/step1.py   # one question, one answer
 uv run src/mini_calude_code/step2.py   # chat in the terminal; type exit to quit
 uv run src/mini_calude_code/step3.py   # the model reads files using a tool
+uv run src/mini_calude_code/agent.py   # coding agent: list, read, write files and run commands
 ```
 
-Run these from the project root: step 3 resolves file paths relative to where you run it.
+Run these from the project root: steps 3 and 4 resolve file paths relative to where you run them.
 
 ## Test
 
@@ -43,6 +44,7 @@ Tests use a fake client, so they need no API key. To also call the real Groq API
 - **Step 1:** send a single prompt to an LLM and print the reply.
 - **Step 2:** a chat loop that remembers the conversation.
 - **Step 3:** give the model a tool (`read_file`) and loop until it is done using it.
+- **Step 4:** a small coding agent (`agent.py`) that can list, read and write files and run shell commands.
 
 ### Step 2: why agents need to remember context
 
@@ -105,3 +107,41 @@ tool results only help because they are in the history the model sees next.
 Tools are looked up by name in a `TOOLS` table, so adding one (writing files,
 running commands) means writing the function and its schema. Unknown tool names
 return an error message to the model instead of crashing the program.
+
+### Step 4: a coding agent
+
+Step 4 keeps step 3's loop and gives the model enough tools to do real work in a
+project folder:
+
+| Tool | What it does |
+| --- | --- |
+| `list_files(path)` | lists a directory; folders end with `/` |
+| `read_file(path)` | returns a file's contents |
+| `write_file(path, content)` | creates or overwrites a file |
+| `run_command(command)` | runs a shell command and returns its output |
+
+With these the model can look around, make a change, and check it, for example
+by writing a script and then running it to see if it works.
+
+```
+You:    Create hello.py that prints hi, then run it
+  tool: write_file({'path': 'hello.py', 'content': "print('hi')"})
+  Run 'python hello.py'? [y/N] y
+  tool: run_command({'command': 'python hello.py'})
+Agent:  I created hello.py and ran it; it printed "hi".
+```
+
+Running commands is the most dangerous tool, so `run_command` asks you to approve
+each command first. If you decline, the model is told so and can try something
+else. This is the same idea as Claude Code's permission prompts.
+
+Two other details make the agent more robust:
+
+- **Errors go back to the model.** If a tool fails (a missing file, bad arguments),
+  `run_tool` returns the error as text instead of crashing, so the model can read
+  it and fix its next step.
+- **The system prompt names the OS.** The model is told which operating system it
+  is on, so it picks shell commands that work there (e.g. `dir` vs `ls`).
+
+The chat in `main()` keeps one `messages` list across turns, so you can give
+follow-up instructions and the agent remembers what it already did.
