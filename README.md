@@ -25,7 +25,10 @@ Get a free key at https://console.groq.com/keys.
 ```sh
 uv run src/mini_calude_code/step1.py   # one question, one answer
 uv run src/mini_calude_code/step2.py   # chat in the terminal; type exit to quit
+uv run src/mini_calude_code/step3.py   # the model reads files using a tool
 ```
+
+Run these from the project root: step 3 resolves file paths relative to where you run it.
 
 ## Test
 
@@ -39,6 +42,7 @@ Tests use a fake client, so they need no API key. To also call the real Groq API
 
 - **Step 1:** send a single prompt to an LLM and print the reply.
 - **Step 2:** a chat loop that remembers the conversation.
+- **Step 3:** give the model a tool (`read_file`) and loop until it is done using it.
 
 ### Step 2: why agents need to remember context
 
@@ -68,3 +72,36 @@ same list.
 The trade-off is that the history grows every turn, so each request sends more
 tokens. Real agents eventually have to trim or summarise old messages to stay
 within the model's context window.
+
+### Step 3: tools and the agent loop
+
+A chatbot can only talk. An **agent** can act. Step 3 is where that starts: we give
+the model a tool, `read_file`, so it can look at files on disk.
+
+The model never runs code itself. Instead:
+
+1. We send the conversation plus a **tool schema**: a JSON description of each tool's
+   name, purpose and parameters.
+2. If the model needs a tool, it replies with a **tool call** (e.g.
+   `read_file(path="notes.txt")`) instead of an answer.
+3. **Our program** runs the function and appends the result to `messages` as a
+   `tool` message, matched to the request by its `tool_call_id`.
+4. We call the model again with the updated history.
+5. Repeat until the model replies with no tool calls. That reply is the final answer.
+
+```
+user:       What is inside notes.txt, notes1.txt and notes2.txt?
+assistant:  [tool calls] read_file(notes.txt), read_file(notes1.txt), read_file(notes2.txt)
+tool:       This is a dummy file. Hello Shivin!!
+tool:       File notes1.txt not found
+tool:       File notes2.txt not found
+assistant:  notes.txt says "Hello Shivin!!"; notes1.txt and notes2.txt don't exist.
+```
+
+This loop (model decides, program acts, result goes back into the history) is the
+core of every coding agent, including Claude Code. It relies on step 2's memory: the
+tool results only help because they are in the history the model sees next.
+
+Tools are looked up by name in a `TOOLS` table, so adding one (writing files,
+running commands) means writing the function and its schema. Unknown tool names
+return an error message to the model instead of crashing the program.
