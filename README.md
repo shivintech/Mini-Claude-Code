@@ -26,6 +26,14 @@ Get a free key at https://console.groq.com/keys.
 uv run src/mini_calude_code/step1.py
 ```
 
+## Test
+
+```sh
+uv run pytest
+```
+
+Tests use a fake client, so they need no API key. To also call the real Groq API, set `RUN_LIVE_TESTS=1`.
+
 ## Steps
 
 - **Step 1:** send a single prompt to an LLM and print the reply.
